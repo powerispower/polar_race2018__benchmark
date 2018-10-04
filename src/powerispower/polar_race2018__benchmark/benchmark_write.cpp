@@ -60,7 +60,6 @@ int main(int argc, char* argv[]) {
     }
 
     // parse FLAGS_data_num_per_thread
-    std::int64_t data_num_per_thread = 0;
     {
         char* option = get_cmd_option(argv, argv + argc, "--data_num_per_thread");
         if (option != nullptr) {
@@ -73,7 +72,7 @@ int main(int argc, char* argv[]) {
         std::ifstream input_file(FLAGS_input_data
             , std::ifstream::ate | std::ifstream::binary);
         std::int64_t required_file_size =
-            FLAGS_thread_num * data_num_per_thread * (FLAGS_key_size_byte + FLAGS_value_size_byte);
+            FLAGS_thread_num * FLAGS_data_num_per_thread * (FLAGS_key_size_byte + FLAGS_value_size_byte);
         if (input_file.tellg() < required_file_size) {
             std::cerr << "input_file.tellg(" << input_file.tellg() << ")"
                 << " < required_file_size(" << required_file_size << ")"
