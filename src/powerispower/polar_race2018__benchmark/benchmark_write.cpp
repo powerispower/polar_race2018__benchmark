@@ -27,6 +27,14 @@ struct WorkState {
     std::mt19937_64 random_uint64_generator;
     // random buffer for value
     std::string fake_data;
+
+    std::thread::id worker_id;
+    std::chrono::system_clock::time_point start_time;
+    std::int64_t processed_data_num;
+
+    WorkState()
+        : processed_data_num(0)
+    {}
 };
 
 int parse_flags(int argc, char* argv[]) {
@@ -90,6 +98,7 @@ int main(int argc, char* argv[]) {
     // open db
     std::unique_ptr<::polar_race::Engine> db_engine;
     {
+        std::cerr << "open db start" << std::endl;
         ::polar_race::Engine* engine_ptr = nullptr;
         ::polar_race::RetCode ret =
             ::polar_race::EngineRace::Open(FLAGS_db_name, &engine_ptr);
@@ -100,11 +109,14 @@ int main(int argc, char* argv[]) {
             return -1;
         }
         db_engine.reset(engine_ptr);
+        std::cerr << "open db end" << std::endl;
     }
 
     std::vector<std::thread> workers;
     std::vector<WorkState> work_states(FLAGS_thread_num);
+    // prepare work_states
     {
+        std::cerr << "prepare work_states start" << std::endl;
         std::random_device true_rand;
         for (auto& work_state : work_states) {
             // init work_state.random_uint64_generator
@@ -120,18 +132,57 @@ int main(int argc, char* argv[]) {
                 work_state.fake_data.begin(), work_state.fake_data.end()
                 , std::ref(random_bytes_engine));
         }
+        std::cerr << "prepare work_states end" << std::endl;
     }
 
+    int monitor_control_flag = 1;
+    // run monitor
+    std::thread monitor(
+        [&work_states, &monitor_control_flag] () {
+            while (monitor_control_flag == 1) {
+                std::chrono::duration<double> duration_sum(0);
+                std::int64_t processed_data_num_sum = 0;
+                for (const auto& work_state: work_states) {
+                    std::chrono::duration<double> duration =
+                        std::chrono::high_resolution_clock::now() - work_state.start_time;
+                    std::ostringstream oss;
+                    oss << "thread-" << work_state.worker_id << " :"
+                        << " duration_s=" << duration.count()
+                        << ", processed_data_num=" << work_state.processed_data_num
+                        << std::endl;
+                    std::cerr << oss.str();
+
+                    duration_sum += duration;
+                    processed_data_num_sum += work_state.processed_data_num;
+                }
+
+                // notice log
+                {
+                    std::ostringstream oss;
+                    oss << "std::time(nullptr)=" << std::time(nullptr)
+                        << ", duration_sum_s=" << duration_sum.count()
+                        << ", processed_data_num_sum=" << processed_data_num_sum
+                        << std::endl;
+                    std::cerr << oss.str();
+                }
+
+                std::this_thread::sleep_for(std::chrono::seconds(5));
+            }
+        });
+
+    // run worker
     for (int i = 0; i < FLAGS_thread_num; i++) {
         workers.push_back(std::thread(
             [&db_engine, &work_states, i] () {
-                auto thread_start_time = std::chrono::high_resolution_clock::now();
+                auto& work_state = work_states[i];
+                work_state.start_time = std::chrono::high_resolution_clock::now();
+                work_state.worker_id = std::this_thread::get_id();
                 std::chrono::duration<double> framework_io_spend;
                 std::shared_ptr<void> defer_0(
                     nullptr
-                    , [&thread_start_time, &framework_io_spend](...) {
+                    , [&work_state, &framework_io_spend](...) {
                         std::chrono::duration<double> duration =
-                            std::chrono::high_resolution_clock::now() - thread_start_time;
+                            std::chrono::high_resolution_clock::now() - work_state.start_time;
                         std::ostringstream oss;
                         oss << "thread-" << std::this_thread::get_id() << " is over"
                             << ", duration_s=" << duration.count()
@@ -140,7 +191,6 @@ int main(int argc, char* argv[]) {
                         std::cerr << oss.str();
                     });
 
-                auto& work_state = work_states[i];
                 int buffer_offset = 0;
                 for (int i = 0; i < FLAGS_data_num_per_thread; i++) {
                     // prepare key-value
@@ -181,6 +231,8 @@ int main(int argc, char* argv[]) {
                         framework_io_spend +=
                             std::chrono::high_resolution_clock::now() - start;
                     }
+
+                    work_state.processed_data_num += 1;
                 }
             }
         ));
@@ -189,6 +241,8 @@ int main(int argc, char* argv[]) {
     for (auto& worker : workers) {
         worker.join();
     }
+    monitor_control_flag = 0;
+    monitor.join();
 
     return 0;
 }
