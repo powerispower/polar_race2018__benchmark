@@ -24,6 +24,7 @@ std::int64_t FLAGS_key_size_byte = 8;
 std::int64_t FLAGS_value_size_byte = 4096;
 bool FLAGS_record_key_value = false;
 std::int64_t FLAGS_fake_data_seed = 19937;
+std::uint64_t FLAGS_key_mask = std::numeric_limits<std::uint64_t>::max();
 
 struct WorkState {
     std::mt19937_64 random_uint64_generator;
@@ -67,7 +68,7 @@ int parse_flags(int argc, char* argv[]) {
     {
         char* option = get_cmd_option(argv, argv + argc, "--thread_num");
         if (option != nullptr) {
-            FLAGS_thread_num = std::stoi(option);
+            FLAGS_thread_num = std::stoll(option);
         }
     }
 
@@ -75,7 +76,7 @@ int parse_flags(int argc, char* argv[]) {
     {
         char* option = get_cmd_option(argv, argv + argc, "--data_num_per_thread");
         if (option != nullptr) {
-            FLAGS_data_num_per_thread = std::stoi(option);
+            FLAGS_data_num_per_thread = std::stoll(option);
         }
     }
 
@@ -91,7 +92,15 @@ int parse_flags(int argc, char* argv[]) {
     {
         char* option = get_cmd_option(argv, argv + argc, "--fake_data_seed");
         if (option != nullptr) {
-            FLAGS_fake_data_seed = std::stoi(option);
+            FLAGS_fake_data_seed = std::stoll(option);
+        }
+    }
+
+    // parse FLAGS_key_mask
+    {
+        char* option = get_cmd_option(argv, argv + argc, "--key_mask");
+        if (option != nullptr) {
+            FLAGS_key_mask = std::stoull(option);
         }
     }
 
@@ -205,7 +214,7 @@ int main(int argc, char* argv[]) {
                 int buffer_offset = 0;
                 for (int i = 0; i < FLAGS_data_num_per_thread; i++) {
                     // prepare key-value
-                    std::uint64_t key_uint64 = work_state.random_uint64_generator();
+                    std::uint64_t key_uint64 = work_state.random_uint64_generator() & FLAGS_key_mask;
                     ::polar_race::PolarString key(
                         (char*)&key_uint64
                         , FLAGS_key_size_byte
