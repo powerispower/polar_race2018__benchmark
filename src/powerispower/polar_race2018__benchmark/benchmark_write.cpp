@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <atomic>
 #include <climits>
 #include <chrono>
 #include <limits>
@@ -22,6 +23,7 @@ std::int64_t FLAGS_data_num_per_thread = 1000000;
 std::int64_t FLAGS_key_size_byte = 8;
 std::int64_t FLAGS_value_size_byte = 4096;
 bool FLAGS_record_key_value = false;
+std::int64_t FLAGS_fake_data_seed = 19937;
 
 struct WorkState {
     std::mt19937_64 random_uint64_generator;
@@ -45,7 +47,8 @@ int parse_flags(int argc, char* argv[]) {
         "\n\t--db_name (database name)"
         "\n\t--thread_num (benchmark thread num) default: 64"
         "\n\t--data_num_per_thread (xxx) default: 1e6"
-        "\n\t--record_key_value (xxx) default: false";
+        "\n\t--record_key_value (xxx) default: false"
+        "\n\t--fake_data_seed (fake data random generator seed) default: 19937";
 
     if (cmd_option_exist(argv, argv + argc, "--help")) {
         std::cerr << help_message << std::endl;
@@ -84,6 +87,14 @@ int parse_flags(int argc, char* argv[]) {
         }
     }
 
+    // parse FLAGS_fake_data_seed
+    {
+        char* option = get_cmd_option(argv, argv + argc, "--fake_data_seed");
+        if (option != nullptr) {
+            FLAGS_fake_data_seed = std::stoi(option);
+        }
+    }
+
     return 0;
 }
 
@@ -117,17 +128,17 @@ int main(int argc, char* argv[]) {
     // prepare work_states
     {
         std::cerr << "prepare work_states start" << std::endl;
-        std::random_device true_rand;
+        std::mt19937_64 seed_generator(FLAGS_fake_data_seed);
         for (auto& work_state : work_states) {
             // init work_state.random_uint64_generator
-            work_state.random_uint64_generator.seed(true_rand());
+            work_state.random_uint64_generator.seed(seed_generator());
 
             // init work_state.fake_data
             work_state.fake_data.resize(
                 std::max(std::int64_t(1048576), FLAGS_value_size_byte)
             );
             std::independent_bits_engine<std::default_random_engine, CHAR_BIT, unsigned char> random_bytes_engine;
-            random_bytes_engine.seed(true_rand());
+            random_bytes_engine.seed(seed_generator());
             std::generate(
                 work_state.fake_data.begin(), work_state.fake_data.end()
                 , std::ref(random_bytes_engine));
