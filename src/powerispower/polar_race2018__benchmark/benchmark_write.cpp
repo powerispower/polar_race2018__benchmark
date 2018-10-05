@@ -30,7 +30,7 @@ struct WorkState {
 
     std::thread::id worker_id;
     std::chrono::system_clock::time_point start_time;
-    std::int64_t processed_data_num;
+    std::atomic<std::int64_t> processed_data_num;
 
     WorkState()
         : processed_data_num(0)
