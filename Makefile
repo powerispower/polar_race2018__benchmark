@@ -2,10 +2,11 @@
 SOURCES_DIR = src/powerispower/polar_race2018__benchmark
 MODULE_ENGINE = third_party/powerispower/polar_race2018__engine
 CC = g++
-CC_FLAGS = -W -Wextra -Wall -Wsign-compare \
-	-Wno-unused-parameter -Woverloaded-virtual \
-	-Wnon-virtual-dtor -Wno-missing-field-initializers \
-	-std=c++11 -O2
+CC_FLAGS = -g -pipe -Wall \
+	-W -fPIC -Wno-unused-parameter \
+	-Wno-strict-aliasing -fno-omit-frame-pointer \
+	-Wno-invalid-offsetof -std=c++11 -O2
+
 LDFLAGS = -L$(MODULE_ENGINE)/lib -lengine -pthread
 INCPATHS = -I./src -I$(MODULE_ENGINE)
 
