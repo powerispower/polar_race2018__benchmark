@@ -224,7 +224,7 @@ int main(int argc, char* argv[]) {
                         db_engine->Write(key, value);
                     if (ret != ::polar_race::RetCode::kSucc) {
                         std::ostringstream oss;
-                        oss << "engine->Write failed"
+                        oss << "db_engine->Write failed"
                             << ", ret=" << ret
                             << std::endl;
                         std::cerr << oss.str();
