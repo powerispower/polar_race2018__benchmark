@@ -12,7 +12,7 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include <map>
+#include <unordered_map>
 
 #include <engine_race/engine_race.h>
 
@@ -21,7 +21,6 @@
 std::string FLAGS_db_name = "./test_db";
 std::string FLAGS_input_data = "./benchmark_write.out";
 std::int64_t FLAGS_thread_num = 64;
-std::int64_t FLAGS_data_num_per_thread = 1000000;
 
 struct WorkState {
     std::thread::id worker_id;
@@ -38,8 +37,7 @@ int parse_flags(int argc, char* argv[]) {
         "Usage : ./benchmark_write"
         "\n\t--db_name (database name)"
         "\n\t--input_data (the name of the file included input data) default: ./benchmark_write.out"
-        "\n\t--thread_num (benchmark thread num) default: 64"
-        "\n\t--data_num_per_thread (xxx) default: 1e6";
+        "\n\t--thread_num (benchmark thread num) default: 64";
 
     if (cmd_option_exist(argv, argv + argc, "--help")) {
         std::cerr << help_message << std::endl;
@@ -66,14 +64,6 @@ int parse_flags(int argc, char* argv[]) {
         char* option = get_cmd_option(argv, argv + argc, "--thread_num");
         if (option != nullptr) {
             FLAGS_thread_num = std::stoll(option);
-        }
-    }
-
-    // parse FLAGS_data_num_per_thread
-    {
-        char* option = get_cmd_option(argv, argv + argc, "--data_num_per_thread");
-        if (option != nullptr) {
-            FLAGS_data_num_per_thread = std::stoll(option);
         }
     }
 
@@ -106,9 +96,8 @@ int main(int argc, char* argv[]) {
     }
 
     // load data from file
-    std::map<std::int64_t, std::size_t> hash_mem;
+    std::unordered_map<std::int64_t, std::size_t> hash_mem;
     std::vector<std::int64_t> key_int64_vec;
-    auto key_int64_vec_size = key_int64_vec.size();
     {
         std::cerr << "try to load data from file, start..." << std::endl;
 
@@ -120,29 +109,31 @@ int main(int argc, char* argv[]) {
         std::int64_t k;
         std::size_t v;
 
-        while(hash_file >> k >> v){
+        while (hash_file >> k >> v) {
             hash_mem[k] = v;
             key_int64_vec.push_back(k);
         }
-        hash_file.close();
-
-        key_int64_vec_size = key_int64_vec.size();
 
         auto end = std::chrono::high_resolution_clock::now();
         load_data_spend = end - start;
         std::cerr << "load data from file end"
-                  <<", load_data_spend_s="<<load_data_spend.count()
-                  <<std::endl;
+                  << ", load_data_spend_s=" << load_data_spend.count()
+                  << std::endl;
     }
+    // 每个线程拿到的数据量，为使末尾数据能被读到，向上取整
+    int data_num_per_thread = key_int64_vec.size() * 1.0 / FLAGS_thread_num + 0.5;
+    std::cerr << "data_num_=" << key_int64_vec.size()
+              << ", thread_num=" << FLAGS_thread_num
+              << ", data_num_per_thread=" << data_num_per_thread
+              << std::endl;
 
     std::vector<std::thread> workers;
     std::vector<WorkState> work_states(FLAGS_thread_num);
 
     // run worker
     for (int i = 0; i < FLAGS_thread_num; i++) {
-        std::int64_t offset = i * FLAGS_data_num_per_thread;
         workers.push_back(std::thread(
-            [&db_engine, &work_states, i, &hash_mem, &key_int64_vec, &key_int64_vec_size, &offset] () {
+            [&db_engine, &work_states, i, &hash_mem, &key_int64_vec, &data_num_per_thread] () {
                 auto& work_state = work_states[i];
                 work_state.start_time = std::chrono::high_resolution_clock::now();
                 work_state.worker_id = std::this_thread::get_id();
@@ -166,13 +157,10 @@ int main(int argc, char* argv[]) {
                         std::cerr << oss.str();
                     });
 
-                std::int64_t index = offset;
-                for (int i = 0; i < FLAGS_data_num_per_thread; i++) {
+                std::int64_t index = i * data_num_per_thread;
+                for (int j = 0; j < data_num_per_thread; j++) {
                     // index合法性检验
-                    if(!(index >= 0 && index < key_int64_vec_size)){
-                        std::ostringstream oss;
-                        oss << "invalid index of vector: "<< index << std::endl;
-                        std::cerr << oss.str(); 
+                    if(!(index >= 0 && index < key_int64_vec.size())){
                         return;
                     }
 
@@ -198,9 +186,9 @@ int main(int argc, char* argv[]) {
                         if(value_hashed_in_db!=value_hashed_in_mem){
                             auto start = std::chrono::high_resolution_clock::now();
                             std::ostringstream oss;
-                            oss << "db_engine->Read, not match!, key_int64="<< key_int64
-                                << ", hash(value)="<<value_hashed_in_db
-                                << ", should be: "<<value_hashed_in_mem
+                            oss << "db_engine->Read, not match!, key_int64=" << key_int64
+                                << ", hash(value)=" << value_hashed_in_db
+                                << ", should be: " << value_hashed_in_mem
                                 << std::endl;
                             std::cerr << oss.str();
                             framework_io_spend +=
@@ -211,7 +199,7 @@ int main(int argc, char* argv[]) {
                         auto start = std::chrono::high_resolution_clock::now();
                         std::ostringstream oss;
                         oss << "db_engine->Read: not found!"
-                            <<" key_int64="<< key_int64
+                            << " key_int64=" << key_int64
                             << std::endl;
                         std::cerr << oss.str();
                         framework_io_spend +=
@@ -220,7 +208,8 @@ int main(int argc, char* argv[]) {
                     else{
                         std::ostringstream oss;
                         oss << "engine->Read: failed!"
-                            <<" ret=" << ret << std::endl;
+                            << " ret=" << ret
+                            << std::endl;
                         std::cerr << oss.str();
                         return;
                     }
