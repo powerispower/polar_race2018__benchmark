@@ -49,7 +49,8 @@ int parse_flags(int argc, char* argv[]) {
         "\n\t--thread_num (benchmark thread num) default: 64"
         "\n\t--data_num_per_thread (xxx) default: 1e6"
         "\n\t--record_key_value (xxx) default: false"
-        "\n\t--fake_data_seed (fake data random generator seed) default: 19937";
+        "\n\t--fake_data_seed (fake data random generator seed) default: 19937"
+        "\n\t--key_mask (key make) default: 18446744073709551615";
 
     if (cmd_option_exist(argv, argv + argc, "--help")) {
         std::cerr << help_message << std::endl;

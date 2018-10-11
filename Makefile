@@ -24,7 +24,7 @@ $(BINS): module_engine $(objects)
 
 # pre build
 module_engine:
-	@echo "shjwudp make "$(MODULE_ENGINE)
+	@echo "make "$(MODULE_ENGINE)
 	make -C $(MODULE_ENGINE)
 
 # To obtain object files
