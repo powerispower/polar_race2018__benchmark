@@ -11,16 +11,23 @@ LDFLAGS = -L$(MODULE_ENGINE)/lib -lengine -pthread
 INCPATHS = -I./src -I$(MODULE_ENGINE)
 
 # File names
-BINS = benchmark_write
+BINS_W = benchmark_write
+BINS_R = benchmark_read
 
-all: $(BINS)
+all: $(BINS_W) $(BINS_R)
 
 # Main target
-sources = $(SOURCES_DIR)/benchmark_write.cpp $(SOURCES_DIR)/util.cpp
-objects = $(sources:.cpp=.o)
-$(BINS): module_engine $(objects)
-	@echo "objects="$(objects)
-	$(CC) $(INCPATHS) $(objects) $(LDFLAGS) -o benchmark_write
+sources_w = $(SOURCES_DIR)/benchmark_write.cpp $(SOURCES_DIR)/util.cpp
+objects_w = $(sources_w:.cpp=.o)
+$(BINS_W): module_engine $(objects_w)
+	@echo "objects="$(objects_w)
+	$(CC) $(INCPATHS) $(objects_w) $(LDFLAGS) -o benchmark_write
+
+sources_r = $(SOURCES_DIR)/benchmark_read.cpp $(SOURCES_DIR)/util.cpp
+objects_r = $(sources_r:.cpp=.o)
+$(BINS_R): module_engine $(objects_r)
+	@echo "objects="$(objects_r)
+	$(CC) $(INCPATHS) $(objects_r) $(LDFLAGS) -o benchmark_read
 
 # pre build
 module_engine:
@@ -33,6 +40,6 @@ module_engine:
 
 # To remove generated files
 clean:
-	rm -f $(BINS) $(OBJECTS)
+	rm -f $(BINS_W) $(OBJECTS_W) $(BINS_R) $(OBJECTS_R)
 	rm -rf $(OUT_DIR)
 	make -C $(MODULE_ENGINE) clean
